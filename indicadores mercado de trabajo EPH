@@ -1,0 +1,439 @@
+
+
+clear all
+set more off
+cd "D:\Fran facu\Desarrollo economico\Clases practicas\Tp- Desarrollo economico\Progreso"
+
+
+use "usu_individual_t418.dta"
+
+
+*Pulimos la base
+	destring deccfr, replace //Cambio de formato texto a formato numérico
+	
+	drop  if deccfr < 1 | deccfr > 10 // 00 = sin ingresos, 12 = no respuesta, 13 = entrevista indiv no realizada
+	
+	drop if nro_hogar == 51 | nro_hogar == 71 // 51=Servicio doméstico, 71=Pensionistas
+
+	
+**2) Utilizando la EPH, presentar una tabla comparando la situación de la región elegida en relación con las demás 
+//   regiones del país (para el periodo asignado), tomando en cuenta las principales tasas (actividad, empleo, desocupación).
+//   Adicionalmente, realizar la misma comparación utilizando la base del año siguiente al asignado (mismo trimestre).
+//   Utilizar la población con edad de entre 18 y 65 años. Comente los resultados obtenidos.
+
+
+**Para calcular:
+/*
+TASA DE DESEMPLEO: (Nro de desempleados/Poblacion economicamente activa)*100
+TASA DE EMPLEO:  (Nro de ocupados/Poblacion total)*100
+TASA DE ACTIVIDAD: (Poblacion activa/Poblacion total)*100
+
+**************************************[Punto 2- primera parte - 2018 4t]********************************************************************************************************************************/
+{
+**Vamos a necesitar una variable que nos diga la edad de los individuos:
+    gen edad = ch06
+	
+	replace edad = 0 if edad == -1  
+
+**Comenzamos haciendo el calculo de PEA:
+
+	tab estado
+	
+	gen pea = .
+	
+	label var pea "1 = PEA, 0 = no PEA"
+	
+	replace pea = 1 if (estado == 1 | estado == 2)
+	
+	replace pea = 0 if estado == 3 
+	
+	sum pea
+	
+	bysort region: tabulate pea [w=pondera] if edad >= 18 & edad <= 65
+
+	sum pea [w=pondera] if edad >= 18 & edad <= 65 & region == 1 & pea == 1
+	
+	
+**Generamos la variable para la poblacion ocupados
+
+	gen ocupados = .
+	
+	label var ocupados "1=ocupado 0=resto"
+	
+	replace ocupados = 1 if estado == 1
+	
+	replace ocupados = 0 if (estado == 3 | estado == 2)
+	
+	sum ocupados 
+	
+	bysort region: tabulate ocupados [w=pondera] if edad >= 18 & edad <= 65
+	
+	sum ocupados [w=pondera] if edad >= 18 & edad <= 65 & region == 1 & ocupados == 1
+	
+	
+**Generamos la variable que corresponde a los desempleados
+    
+	gen desocupados = .
+	
+	label var desocupados "1=desocupado 0=resto"
+	
+	replace desocupados = 1 if estado == 2
+	
+	replace desocupados = 0 if (estado == 1 | estado == 3)
+	
+	bysort region: tabulate desocupados [w=pondera] if edad >= 18 & edad <= 65
+	
+	tabulate desocupados [w=pondera] if edad >= 18 & edad <= 65 & region == 1
+	
+	sum desocupados [w=pondera] if edad >= 18 & edad <= 65 & region == 1 & desocupados == 1 //hay que hacer un loop con los macros locales para que te calcule las tasas 
+	
+	
+  {  //creo una variable para el bucle
+  
+	gen region_bucle = .
+	
+	replace region_bucle = 1 if region == 01
+	
+	replace region_bucle = 2 if region == 40
+	
+	replace region_bucle = 3 if region == 41
+	
+	replace region_bucle = 4 if region == 42
+	
+	replace region_bucle = 5 if region == 43
+	
+	replace region_bucle = 6 if region == 44
+	}
+  //  
+	
+	**Para la cantidad de personas totales por region utilizamos el siguiente codigo:
+   
+    sum region [w=pondera] if edad >= 18 & edad <= 65 & region_bucle == 1 & region == 1   
+
+	
+	//calculamos la tasa de empleo para todas las regiones iterando con la variable "region_bucle":
+	forvalues i = 1/6 {
+	sum ocupados [w=pondera] if edad >= 18 & edad <= 65 & region_bucle == `i' & ocupados == 1
+	
+	return list
+	
+	local cant_ocupados = r(sum_w)
+	
+    sum pea [w=pondera] if edad >= 18 & edad <= 65 & region_bucle == `i' & pea == 1
+	
+	return list
+	
+	local Pob_activa = r(sum_w)
+	
+	local Tasa_empleo = [(`cant_ocupados'/`Pob_activa') * 100 ]
+	
+	display "Tasa_empleo `i' = `Tasa_empleo'"
+	}
+//Me dio:
+	**Tasa_empleo 2018(GBA) = 89.14505210530457
+	**Tasa_empleo 2018(NOA) = 92.68751920246159
+	**Tasa_empleo 2018(NEA) =  95.56519285632177
+	**Tasa_empleo 2018(Cuyo) = 95.16276430435457
+	**Tasa_empleo 2018(Pampeana) =  90.59205892792134
+	**Tasa_empleo 2018(Patagonica) =  93.88285617640557
+
+	//De la misma forma calculamos la tasa de actividad:
+	forvalues i = 1/6 {
+	sum region_bucle [w=pondera] if edad >= 18 & edad <= 65 & region_bucle == `i' 
+
+	return list
+	
+	local pob_tot = r(sum_w)
+	
+    sum pea [w=pondera] if edad >= 18 & edad <= 65 & region_bucle == `i' & pea == 1
+	
+	return list
+	
+	local Pob_activa = r(sum_w)
+	
+	local Tasa_actividad = [(`Pob_activa'/`pob_tot') * 100 ]
+	
+	display "Tasa_actividad `i' = `Tasa_actividad'"	
+	
+}	
+//Me dio:
+	**Tasa_actividad 2018(GBA) =  74.37233014260626
+	**Tasa_actividad 2018(NOA) = 70.15931273980721
+	**Tasa_actividad 2018(NEA) =   62.84618830016537
+	**Tasa_actividad 2018(Cuyo) =  69.3077389186779
+	**Tasa_actividad 2018(Pampeana) =   71.93626120826744
+	**Tasa_actividad 2018(Patagonica) =   67.28343401724321
+	
+	
+	
+	//Siguiendo el mismo procedimiento podemos calcular la tasa de desempleo:
+	forvalues i = 1/6 {
+	sum desocupados [w=pondera] if edad >= 18 & edad <= 65 & region_bucle == `i' & desocupados == 1
+
+	return list
+	
+	local cant_desocupados = r(sum_w)
+	
+    sum pea [w=pondera] if edad >= 18 & edad <= 65 & region_bucle == `i' & pea == 1
+	
+	return list
+	
+	local Pob_activa = r(sum_w)
+	
+	local Tasa_desempleo = [(`cant_desocupados'/`Pob_activa') * 100 ]
+	
+	display "Tasa_desempleo `i'  = `Tasa_desempleo'"	
+	
+}	
+ //Me dio:
+	**Tasa_desempleo (GBA) = 10.85494789469543
+	**Tasa_desempleo (NOA) = 7.312480797538417
+	**Tasa_desempleo (NEA) = 4.434807143678221
+	**Tasa_desempleo (Cuyo) = 4.837235695645433
+	**Tasa_desempleo (Pampeana) = 9.407941072078655
+	**Tasa_desempleo (Patagonica) = 6.117143823594431
+
+	
+	//compruebo que el calculo de la pea este bien hecho. la resta de la pea y de los ocupados mas los desocupados me tiene que dar lo mismo.
+	{ 
+	
+	sum ocupados [w=pondera] if edad >= 18 & edad <= 65 & region == 1 & ocupados == 1
+	
+	return list
+	
+	local cant_ocupados = r(sum)
+	
+	sum desocupados [w=pondera] if edad >= 18 & edad <= 65 & region == 1 & desocupados == 1
+	
+	local cant_desocupados = r(sum)
+	
+	local suma_de_OYD = (`cant_ocupados'+`cant_desocupados') 
+	
+	 sum pea [w=pondera] if edad >= 18 & edad <= 65 & region == 1 & pea == 1
+	
+	local pea = r(sum)
+	
+	display  `suma_de_OYD' - `pea'
+	
+	}
+}
+	
+
+	
+
+*************************************[Punto 2- segunda parte - 2019 4t]********************************************************************************************************************************************************************************************************************************************************************************************************************************************************
+{	
+	
+	/* Ahora debemos realizar el mismo procedimiento para la base que corresponde a la EPH-trimestre 4- 2019. Se calcularan las mismas tasas y se evaluara el cambio de un año a otro.*/
+	
+	*Importamos el .dta de interes para el punto borrando el dataset persistente del 2018.
+	
+	clear all
+	
+	set more off 
+	
+	cd "D:\Fran facu\Desarrollo economico\Clases practicas\Tp- Desarrollo economico\Progreso"
+
+	use "usu_individual_t419.dta"
+
+	
+	//Igual que anteriormente pulimos la base para que no queden variables strings ni valores que puedan generar errores en la estimacion de las tasas.
+	
+	destring deccfr, replace //Cambio de formato texto a formato numérico
+	
+	drop  if deccfr < 1 | deccfr > 10 // 00 = sin ingresos, 12 = no respuesta, 13 = entrevista indiv no realizada
+	
+	drop if nro_hogar == 51 | nro_hogar == 71 // 51=Servicio doméstico, 71=Pensionistas
+
+	
+	//Creamos todas las variables que utilizamos para el calculo de las tasas en el caso de la EPH de 2018-4t
+	
+	**Vamos a necesitar una variable que nos diga la edad de los individuos:
+    gen edad = ch06
+	
+	replace edad = 0 if edad == -1  
+
+**Comenzamos haciendo el calculo de PEA:
+
+	tab estado
+	
+	gen pea = .
+	
+	label var pea "1 = PEA, 0 = no PEA"
+	
+	replace pea = 1 if (estado == 1 | estado == 2)
+	
+	replace pea = 0 if estado == 3 
+	
+	sum pea
+	
+	bysort region: tabulate pea [w=pondera] if edad >= 18 & edad <= 65
+
+	sum pea [w=pondera] if edad >= 18 & edad <= 65 & region == 1 & pea == 1
+	
+	
+**Generamos la variable para la poblacion ocupados
+
+	gen ocupados = .
+	
+	label var ocupados "1=ocupado 0=resto"
+	
+	replace ocupados = 1 if estado == 1
+	
+	replace ocupados = 0 if (estado == 3 | estado == 2)
+	
+	sum ocupados 
+	
+	bysort region: tabulate ocupados [w=pondera] if edad >= 18 & edad <= 65
+	
+	sum ocupados [w=pondera] if edad >= 18 & edad <= 65 & region == 1 & ocupados == 1
+	
+	
+**Generamos la variable que corresponde a los desempleados
+    
+	gen desocupados = .
+	
+	label var desocupados "1=desocupado 0=resto"
+	
+	replace desocupados = 1 if estado == 2
+	
+	replace desocupados = 0 if (estado == 1 | estado == 3)
+	
+	bysort region: tabulate desocupados [w=pondera] if edad >= 18 & edad <= 65
+	
+	tabulate desocupados [w=pondera] if edad >= 18 & edad <= 65 & region == 1
+	
+	sum desocupados [w=pondera] if edad >= 18 & edad <= 65 & region == 1 & desocupados == 1 //hay que hacer un loop con los macros locales para que te calcule las tasas 
+	
+	
+  {  //creo una variable para el bucle
+  
+	gen region_bucle = .
+	
+	replace region_bucle = 1 if region == 01
+	
+	replace region_bucle = 2 if region == 40
+	
+	replace region_bucle = 3 if region == 41
+	
+	replace region_bucle = 4 if region == 42
+	
+	replace region_bucle = 5 if region == 43
+	
+	replace region_bucle = 6 if region == 44
+	}
+  //  
+	
+	**Para la cantidad de personas totales por region utilizamos el siguiente codigo:
+   
+    sum region [w=pondera] if edad >= 18 & edad <= 65 & region_bucle == 1 & region == 1   
+
+	
+	//calculamos la tasa de empleo para todas las regiones iterando con la variable "region_bucle":
+	forvalues i = 1/6 {
+	sum ocupados [w=pondera] if edad >= 18 & edad <= 65 & region_bucle == `i' & ocupados == 1
+	
+	return list
+	
+	local cant_ocupados = r(sum_w)
+	
+    sum pea [w=pondera] if edad >= 18 & edad <= 65 & region_bucle == `i' & pea == 1
+	
+	return list
+	
+	local Pob_activa = r(sum_w)
+	
+	local Tasa_empleo = [(`cant_ocupados'/`Pob_activa') * 100 ]
+	
+	display "Tasa_empleo `i' = `Tasa_empleo'"
+	}
+//Me dio:
+	**Tasa_empleo 2019 (GBA) = 89.17026018539235
+	**Tasa_empleo 2019(NOA) = 91.85600022670435
+	**Tasa_empleo 2019(NEA) =   94.80026519868302
+	**Tasa_empleo 2019(Cuyo) = 93.78673760276718
+	**Tasa_empleo 2019(Pampeana) =  90.92856087593326
+	**Tasa_empleo 2019(Patagonica) =  93.21081540946064
+
+	//De la misma forma calculamos la tasa de actividad:
+	forvalues i = 1/6 {
+	sum region_bucle [w=pondera] if edad >= 18 & edad <= 65 & region_bucle == `i' 
+
+	return list
+	
+	local pob_tot = r(sum_w)
+	
+    sum pea [w=pondera] if edad >= 18 & edad <= 65 & region_bucle == `i' & pea == 1
+	
+	return list
+	
+	local Pob_activa = r(sum_w)
+	
+	local Tasa_actividad = [(`Pob_activa'/`pob_tot') * 100 ]
+	
+	display "Tasa_actividad `i' = `Tasa_actividad'"	
+	
+}	
+//Me dio:
+	**Tasa_actividad 2019(GBA) =  74.76428359269288
+	**Tasa_actividad 2019(NOA) = 70.91044387160785
+	**Tasa_actividad 2019(NEA) =   64.04591694964798
+	**Tasa_actividad 2019(Cuyo) =  73.7348152511458
+	**Tasa_actividad 2019(Pampeana) =   71.53887530442556
+	**Tasa_actividad 2019(Patagonica) =   69.31499100025714
+	
+	
+	
+	//Siguiendo el mismo procedimiento podemos calcular la tasa de desempleo:
+	forvalues i = 1/6 {
+	sum desocupados [w=pondera] if edad >= 18 & edad <= 65 & region_bucle == `i' & desocupados == 1
+
+	return list
+	
+	local cant_desocupados = r(sum_w)
+	
+    sum pea [w=pondera] if edad >= 18 & edad <= 65 & region_bucle == `i' & pea == 1
+	
+	return list
+	
+	local Pob_activa = r(sum_w)
+	
+	local Tasa_desempleo = [(`cant_desocupados'/`Pob_activa') * 100 ]
+	
+	display "Tasa_desempleo `i'  = `Tasa_desempleo'"	
+	
+}	
+ //Me dio:
+	**Tasa_desempleo 2019(GBA) = 10.82973981460766
+	**Tasa_desempleo 2019(NOA) = 8.143999773295644
+	**Tasa_desempleo 2019(NEA) = 5.199734801316978
+	**Tasa_desempleo 2019(Cuyo) = 6.213262397232819
+	**Tasa_desempleo 2019(Pampeana) = 9.071439124066739
+	**Tasa_desempleo 2019(Patagonica) = 6.789184590539361
+
+	
+	//compruebo que el calculo de la pea este bien hecho. la resta de la pea y de los ocupados mas los desocupados me tiene que dar lo mismo.
+	{ 
+	
+	sum ocupados [w=pondera] if edad >= 18 & edad <= 65 & region == 1 & ocupados == 1
+	
+	return list
+	
+	local cant_ocupados = r(sum)
+	
+	sum desocupados [w=pondera] if edad >= 18 & edad <= 65 & region == 1 & desocupados == 1
+	
+	local cant_desocupados = r(sum)
+	
+	local suma_de_OYD = (`cant_ocupados'+`cant_desocupados') 
+	
+	 sum pea [w=pondera] if edad >= 18 & edad <= 65 & region == 1 & pea == 1
+	
+	local pea = r(sum)
+	
+	display  `suma_de_OYD' - `pea'
+	
+	}
+	//
+}	
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
